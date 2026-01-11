@@ -59,26 +59,27 @@ dotnet run --project Q2Browser.Wpf/Q2Browser.Wpf.csproj
 
 ## Configuration
 
-Before launching games, you need to configure the Q2Pro executable path:
+Before launching games, you need to configure the Q2Pro executable path and other settings.
 
-1. **First run**: The application will create a settings file at:
-   ```
-   %AppData%\Q2ServerBrowser\settings.json
-   ```
+### Using the Settings Window
 
-2. **Edit the settings file** and add your Q2Pro path:
-   ```json
-   {
-     "MasterServerAddress": "master.quake2.com",
-     "MasterServerPort": 27900,
-     "MaxConcurrentProbes": 75,
-     "ProbeTimeoutMs": 3000,
-     "Q2ProExecutablePath": "C:\\Path\\To\\q2pro.exe",
-     "UiUpdateIntervalMs": 150
-   }
-   ```
+1. **Launch the application** (see [Running the Application](#running-the-application) below)
+2. **Click the "Settings" button** in the main window toolbar
+3. **Configure your settings**:
+   - **Q2Pro Executable**: Click "Browse..." to select your `q2pro.exe` file
+   - **Master Server**: Configure HTTP or UDP master server settings
+   - **Options**: Enable/disable refresh on startup, LAN broadcast discovery
+   - **Advanced**: Adjust concurrent probes and timeout settings
+4. **Click "Save"** to apply your changes
 
-   Replace `C:\\Path\\To\\q2pro.exe` with your actual Q2Pro executable path.
+### Settings File Location
+
+Settings are stored in:
+```
+%AppData%\Q2ServerBrowser\settings.json
+```
+
+**Note**: While you can manually edit this JSON file if needed, it's recommended to use the Settings window in the application UI to avoid configuration errors.
 
 ## Running the Application
 

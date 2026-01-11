@@ -9,3 +9,4 @@ E:\Projects\q2-server-browser\Q2Browser.Core\obj\Debug\net8.0\Q2Browser.Core.dll
 E:\Projects\q2-server-browser\Q2Browser.Core\obj\Debug\net8.0\refint\Q2Browser.Core.dll
 E:\Projects\q2-server-browser\Q2Browser.Core\obj\Debug\net8.0\Q2Browser.Core.pdb
 E:\Projects\q2-server-browser\Q2Browser.Core\obj\Debug\net8.0\ref\Q2Browser.Core.dll
+E:\Projects\q2-server-browser\Q2Browser.Core\obj\Debug\net8.0\Q2Browser.Core.sourcelink.json

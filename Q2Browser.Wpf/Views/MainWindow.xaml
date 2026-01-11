@@ -41,30 +41,82 @@
                  VerticalContentAlignment="Center"
                  Tag="Search servers..."/>
 
-        <!-- Server List -->
-        <DataGrid Grid.Row="2" 
-                  ItemsSource="{Binding Servers}"
-                  SelectedItem="{Binding SelectedServer}"
-                  AutoGenerateColumns="False"
-                  IsReadOnly="True"
-                  GridLinesVisibility="Horizontal"
-                  HeadersVisibility="Column"
-                  SelectionMode="Single"
-                  SelectionUnit="FullRow"
-                  VirtualizingPanel.IsVirtualizing="True"
-                  VirtualizingPanel.VirtualizationMode="Recycling"
-                  MouseDoubleClick="DataGrid_MouseDoubleClick"
-                  PreviewMouseLeftButtonDown="DataGrid_PreviewMouseLeftButtonDown"
-                  Margin="10,5">
-            <DataGrid.Columns>
-                <DataGridTextColumn Header="Server Name" Binding="{Binding Hostname, Converter={StaticResource ColorConverter}}" Width="*"/>
-                <DataGridTextColumn Header="Map" Binding="{Binding Map}" Width="120"/>
-                <DataGridTextColumn Header="Mod" Binding="{Binding Mod}" Width="100"/>
-                <DataGridTextColumn Header="Players" Binding="{Binding PlayersText}" Width="80"/>
-                <DataGridTextColumn Header="Ping" Binding="{Binding PingText}" Width="80"/>
-                <DataGridCheckBoxColumn Header="Favorite" Binding="{Binding IsFavorite}" Width="70"/>
-            </DataGrid.Columns>
-        </DataGrid>
+        <!-- Main Content: Server List and Players -->
+        <Grid Grid.Row="2" Margin="10,5">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="5"/>
+                <ColumnDefinition Width="250"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Server List -->
+            <DataGrid Grid.Column="0"
+                      ItemsSource="{Binding Servers}"
+                      SelectedItem="{Binding SelectedServer}"
+                      AutoGenerateColumns="False"
+                      IsReadOnly="True"
+                      GridLinesVisibility="Horizontal"
+                      HeadersVisibility="Column"
+                      SelectionMode="Single"
+                      SelectionUnit="FullRow"
+                      VirtualizingPanel.IsVirtualizing="True"
+                      VirtualizingPanel.VirtualizationMode="Recycling"
+                      MouseDoubleClick="DataGrid_MouseDoubleClick"
+                      PreviewMouseLeftButtonDown="DataGrid_PreviewMouseLeftButtonDown">
+                <DataGrid.ContextMenu>
+                    <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                        <MenuItem Header="Copy Server Name" Command="{Binding CopyServerNameCommand}"/>
+                        <MenuItem Header="Copy IP Address" Command="{Binding CopyIpAddressCommand}"/>
+                    </ContextMenu>
+                </DataGrid.ContextMenu>
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Server Name" Binding="{Binding Hostname, Converter={StaticResource ColorConverter}}" Width="*"/>
+                    <DataGridTextColumn Header="Map" Binding="{Binding Map}" Width="120"/>
+                    <DataGridTextColumn Header="Mod" Binding="{Binding Mod}" Width="100"/>
+                    <DataGridTextColumn Header="Players" Binding="{Binding PlayersText}" Width="80"/>
+                    <DataGridTextColumn Header="Ping" Binding="{Binding PingText}" Width="80"/>
+                    <DataGridCheckBoxColumn Header="Favorite" Binding="{Binding IsFavorite}" Width="70"/>
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <!-- Splitter -->
+            <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" Background="LightGray"/>
+
+            <!-- Players List -->
+            <DataGrid Grid.Column="2"
+                      ItemsSource="{Binding Players}"
+                      AutoGenerateColumns="False"
+                      IsReadOnly="True"
+                      GridLinesVisibility="Horizontal"
+                      HeadersVisibility="Column"
+                      SelectionMode="Single"
+                      VirtualizingPanel.IsVirtualizing="True"
+                      VirtualizingPanel.VirtualizationMode="Recycling">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Frags" Binding="{Binding Score}" Width="50">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="HorizontalAlignment" Value="Right"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Header="RTT" Binding="{Binding Ping}" Width="50">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="HorizontalAlignment" Value="Right"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Header="Name" Binding="{Binding Name, Converter={StaticResource ColorConverter}}" Width="*">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="HorizontalAlignment" Value="Left"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+                </DataGrid.Columns>
+            </DataGrid>
+        </Grid>
 
         <!-- Status Bar -->
         <StatusBar Grid.Row="3">

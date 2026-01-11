@@ -20,6 +20,7 @@ public class ServerRowViewModel : INotifyPropertyChanged
     public int MaxClients => _serverEntry.MaxClients;
     public int? Ping => _serverEntry.Ping;
     public string FullAddress => _serverEntry.FullAddress;
+    public string Address => _serverEntry.Address;
     public bool IsFavorite
     {
         get => _serverEntry.IsFavorite;

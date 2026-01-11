@@ -8,6 +8,7 @@ using System.Net;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows;
 using System.Windows.Data;
 using System.Windows.Input;
 using Q2Browser.Core.Models;
@@ -28,6 +29,8 @@ public class MainViewModel : INotifyPropertyChanged
     private readonly ThrottledObservableCollection<ServerRowViewModel> _servers;
     private readonly ObservableCollection<ServerRowViewModel> _filteredServers;
     private readonly ListCollectionView _serversView;
+    private readonly ObservableCollection<PlayerInfo> _players = new();
+    private readonly ListCollectionView _playersView;
     private readonly HashSet<string> _favoriteAddresses = new();
     private Settings _currentSettings = new();
 
@@ -50,6 +53,11 @@ public class MainViewModel : INotifyPropertyChanged
         // Set default sort: player count descending
         var sortDescription = new SortDescription("CurrentPlayers", ListSortDirection.Descending);
         _serversView.SortDescriptions.Add(sortDescription);
+        
+        // Create a ListCollectionView for players with sorting by score descending
+        _playersView = new ListCollectionView(_players);
+        var playerSortDescription = new SortDescription("Score", ListSortDirection.Descending);
+        _playersView.SortDescriptions.Add(playerSortDescription);
         
         _servers.CollectionChanged += (s, e) =>
         {
@@ -77,6 +85,8 @@ public class MainViewModel : INotifyPropertyChanged
         ToggleFavoriteCommand = new RelayCommand(ToggleFavorite, _ => SelectedServer != null);
         OpenSettingsCommand = new RelayCommand(_ => OpenSettings());
         OpenDiagnosticsCommand = new RelayCommand(_ => OpenDiagnostics());
+        CopyServerNameCommand = new RelayCommand(CopyServerName, _ => SelectedServer != null);
+        CopyIpAddressCommand = new RelayCommand(CopyIpAddress, _ => SelectedServer != null);
         
         _ = InitializeAsync();
     }
@@ -184,7 +194,26 @@ public class MainViewModel : INotifyPropertyChanged
 
     public ICollectionView Servers => _serversView;
 
-    public ServerRowViewModel? SelectedServer { get; set; }
+    private ServerRowViewModel? _selectedServer;
+    public ServerRowViewModel? SelectedServer
+    {
+        get => _selectedServer;
+        set
+        {
+            if (_selectedServer != value)
+            {
+                _selectedServer = value;
+                OnPropertyChanged();
+                UpdatePlayers();
+                ((RelayCommand)ConnectCommand).RaiseCanExecuteChanged();
+                ((RelayCommand)ToggleFavoriteCommand).RaiseCanExecuteChanged();
+                ((RelayCommand)CopyServerNameCommand).RaiseCanExecuteChanged();
+                ((RelayCommand)CopyIpAddressCommand).RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    public ICollectionView Players => _playersView;
 
     public string SearchText
     {
@@ -245,6 +274,8 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand ToggleFavoriteCommand { get; }
     public ICommand OpenSettingsCommand { get; }
     public ICommand OpenDiagnosticsCommand { get; }
+    public ICommand CopyServerNameCommand { get; }
+    public ICommand CopyIpAddressCommand { get; }
 
     private async Task RefreshServersAsync()
     {
@@ -425,7 +456,51 @@ public class MainViewModel : INotifyPropertyChanged
         await _favoritesService.SaveFavoritesAsync(_favoriteAddresses.ToList());
     }
 
+    private void CopyServerName(object? parameter)
+    {
+        if (SelectedServer == null) return;
+        
+        try
+        {
+            Clipboard.SetText(SelectedServer.Hostname);
+            StatusText = $"Copied server name: {SelectedServer.Hostname}";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Error copying server name: {ex.Message}";
+            DiagnosticLogger.Instance.LogError($"Error copying server name: {ex.Message}", ex.ToString());
+        }
+    }
+
+    private void CopyIpAddress(object? parameter)
+    {
+        if (SelectedServer == null) return;
+        
+        try
+        {
+            Clipboard.SetText(SelectedServer.FullAddress);
+            StatusText = $"Copied IP address: {SelectedServer.FullAddress}";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Error copying IP address: {ex.Message}";
+            DiagnosticLogger.Instance.LogError($"Error copying IP address: {ex.Message}", ex.ToString());
+        }
+    }
+
     public event PropertyChangedEventHandler? PropertyChanged;
+
+    private void UpdatePlayers()
+    {
+        _players.Clear();
+        if (SelectedServer?.ServerEntry?.Players != null)
+        {
+            foreach (var player in SelectedServer.ServerEntry.Players)
+            {
+                _players.Add(player);
+            }
+        }
+    }
 
     protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {

@@ -28,3 +28,4 @@ E:\Projects\q2-server-browser\Q2Browser.Wpf\obj\Debug\net8.0-windows\Views\Setti
 E:\Projects\q2-server-browser\Q2Browser.Wpf\obj\Debug\net8.0-windows\Views\SettingsWindow.g.cs
 E:\Projects\q2-server-browser\Q2Browser.Wpf\obj\Debug\net8.0-windows\Views\DiagnosticWindow.baml
 E:\Projects\q2-server-browser\Q2Browser.Wpf\obj\Debug\net8.0-windows\Views\DiagnosticWindow.g.cs
+E:\Projects\q2-server-browser\Q2Browser.Wpf\obj\Debug\net8.0-windows\Q2Browser.Wpf.sourcelink.json
