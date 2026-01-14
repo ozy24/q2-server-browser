@@ -44,6 +44,7 @@ public class Settings
     public bool EnableLanBroadcast { get; set; } = true;
     public bool RefreshOnStartup { get; set; } = true;
     public bool PortableMode { get; set; } = true;
+    public bool IncludePlayerNamesInSearch { get; set; } = false;
     public string LogLevel { get; set; } = "Warning";
 
     public int MaxConcurrentProbes

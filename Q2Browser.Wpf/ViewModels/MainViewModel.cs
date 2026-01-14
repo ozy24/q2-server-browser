@@ -37,6 +37,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private bool _isRefreshing;
     private string _statusText = "Ready";
     private int _serversFound;
+    private bool _includePlayerNamesInSearch;
     private CancellationTokenSource? _refreshCancellation;
     private bool _isInitialized;
 
@@ -115,6 +116,9 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         _isInitialized = true;
         System.Windows.Application.Current.Dispatcher.Invoke(() =>
         {
+            // Initialize search settings
+            IncludePlayerNamesInSearch = _currentSettings.IncludePlayerNamesInSearch;
+            
             ((RelayCommand)RefreshCommand).RaiseCanExecuteChanged();
             
             // Auto-refresh on startup if enabled
@@ -156,6 +160,12 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         _gameServerProbe = new GameServerProbe(_currentSettings, logger);
         _launcherService = new LauncherService(_currentSettings);
         
+        // Update search settings on UI thread
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            IncludePlayerNamesInSearch = _currentSettings.IncludePlayerNamesInSearch;
+        });
+
     }
 
     private void OpenSettings()
@@ -266,6 +276,34 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                 _searchText = value;
                 OnPropertyChanged();
                 UpdateFilter();
+            }
+        }
+    }
+
+    public bool IncludePlayerNamesInSearch
+    {
+        get => _includePlayerNamesInSearch;
+        set
+        {
+            if (_includePlayerNamesInSearch != value)
+            {
+                _includePlayerNamesInSearch = value;
+                _currentSettings.IncludePlayerNamesInSearch = value;
+                OnPropertyChanged();
+                UpdateFilter();
+                
+                // Save settings asynchronously
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await _favoritesService.SaveSettingsAsync(_currentSettings);
+                    }
+                    catch (Exception ex)
+                    {
+                        DiagnosticLogger.Instance.LogError($"Failed to save settings: {ex.Message}", ex.ToString());
+                    }
+                });
             }
         }
     }
@@ -427,14 +465,72 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         }
         else
         {
-            var searchLower = SearchText.ToLowerInvariant();
+            // Check if search text is wrapped in quotes for exact matching
+            var trimmedSearch = SearchText.Trim();
+            bool isExactMatch = false;
+            string searchTerm = trimmedSearch;
+            
+            if (trimmedSearch.Length >= 2 &&
+                ((trimmedSearch.StartsWith('"') && trimmedSearch.EndsWith('"')) ||
+                 (trimmedSearch.StartsWith('\'') && trimmedSearch.EndsWith('\''))))
+            {
+                // Extract text between quotes
+                isExactMatch = true;
+                searchTerm = trimmedSearch.Substring(1, trimmedSearch.Length - 2).Trim();
+            }
+            
+            // If search term is empty after processing, show all
+            if (string.IsNullOrWhiteSpace(searchTerm))
+            {
+                _serversView.Filter = null;
+                return;
+            }
+            
+            var searchLower = searchTerm.ToLowerInvariant();
+            
             _serversView.Filter = item =>
             {
                 if (item is ServerRowViewModel server)
                 {
-                    return server.Hostname.ToLowerInvariant().Contains(searchLower) ||
-                           server.Map.ToLowerInvariant().Contains(searchLower) ||
-                           server.Mod.ToLowerInvariant().Contains(searchLower);
+                    // Helper function to check if text matches
+                    Func<string, string, bool> matches = (text, search) =>
+                    {
+                        var textLower = text.ToLowerInvariant();
+                        return isExactMatch 
+                            ? textLower == search 
+                            : textLower.Contains(search);
+                    };
+                    
+                    // Search in server properties
+                    if (matches(server.Hostname, searchLower) ||
+                        matches(server.Map, searchLower) ||
+                        matches(server.Mod, searchLower))
+                    {
+                        return true;
+                    }
+                    
+                    // Search in player names if enabled
+                    if (IncludePlayerNamesInSearch)
+                    {
+                        if (isExactMatch)
+                        {
+                            if (server.ServerEntry.Players.Any(player => 
+                                player.Name.ToLowerInvariant() == searchLower))
+                            {
+                                return true;
+                            }
+                        }
+                        else
+                        {
+                            if (server.ServerEntry.Players.Any(player => 
+                                player.Name.ToLowerInvariant().Contains(searchLower)))
+                            {
+                                return true;
+                            }
+                        }
+                    }
+                    
+                    return false;
                 }
                 return false;
             };

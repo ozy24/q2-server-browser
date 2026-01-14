@@ -26,7 +26,10 @@
             <!-- Master Server Settings -->
             <GroupBox Header="Master Server" Margin="0,0,0,15">
                 <StackPanel Margin="10">
-                    <CheckBox Content="Use HTTP Master Server" IsChecked="{Binding UseHttpMasterServer}" Margin="0,0,0,10"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                        <CheckBox IsChecked="{Binding UseHttpMasterServer}" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                        <TextBlock Text="Use HTTP Master Server" VerticalAlignment="Center"/>
+                    </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,10" IsEnabled="{Binding UseHttpMasterServer}">
                         <TextBlock Text="HTTP URL:" Width="120" VerticalAlignment="Center"/>
                         <TextBox Text="{Binding HttpMasterServerUrl}" Width="350" VerticalContentAlignment="Center"/>
@@ -40,17 +43,26 @@
                         <TextBlock Text="Port:" Width="120" VerticalAlignment="Center"/>
                         <TextBox Text="{Binding MasterServerPort}" Width="100" VerticalContentAlignment="Center" IsEnabled="{Binding UseHttpMasterServer, Converter={StaticResource InverseBooleanConverter}}"/>
                     </StackPanel>
-                    <CheckBox Content="Enable LAN Broadcast Discovery" IsChecked="{Binding EnableLanBroadcast}" Margin="0,5,0,0"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
+                        <CheckBox IsChecked="{Binding EnableLanBroadcast}" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                        <TextBlock Text="Enable LAN Broadcast Discovery" VerticalAlignment="Center"/>
+                    </StackPanel>
                 </StackPanel>
             </GroupBox>
 
             <!-- Options -->
             <GroupBox Header="Options" Margin="0,0,0,15">
                 <StackPanel Margin="10">
-                    <CheckBox Content="Portable mode (store settings in application directory)" IsChecked="{Binding PortableMode}" Margin="0,0,0,10"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                        <CheckBox IsChecked="{Binding PortableMode}" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                        <TextBlock Text="Portable mode (store settings in application directory)" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                    </StackPanel>
                     <TextBlock Text="When enabled, settings and favorites are stored alongside the executable. When disabled, they are stored in AppData." 
-                               FontStyle="Italic" FontSize="10" Foreground="Gray" Margin="0,0,0,10" TextWrapping="Wrap"/>
-                    <CheckBox Content="Refresh servers on startup" IsChecked="{Binding RefreshOnStartup}" Margin="0,5,0,0"/>
+                               FontStyle="Italic" FontSize="10" Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" Margin="0,0,0,10" TextWrapping="Wrap"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
+                        <CheckBox IsChecked="{Binding RefreshOnStartup}" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                        <TextBlock Text="Refresh servers on startup" VerticalAlignment="Center"/>
+                    </StackPanel>
                 </StackPanel>
             </GroupBox>
 
@@ -86,7 +98,7 @@
                                 <ComboBoxItem Content="Error"/>
                             </ComboBox.Items>
                         </ComboBox>
-                        <TextBlock Text="(Controls diagnostic verbosity)" FontStyle="Italic" FontSize="10" Foreground="Gray" 
+                        <TextBlock Text="(Controls diagnostic verbosity)" FontStyle="Italic" FontSize="10" Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" 
                                    VerticalAlignment="Center" Margin="10,0,0,0"/>
                     </StackPanel>
                 </StackPanel>

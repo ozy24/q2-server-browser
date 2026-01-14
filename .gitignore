@@ -186,3 +186,7 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
+# Q2Browser user data files
+settings.json
+favorites.json
+

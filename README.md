@@ -1,6 +1,6 @@
 # Q2Browser
 
-A high-performance, native Windows desktop application to browse Quake II multiplayer servers (original Quake 2, not re-release). Built with .NET 10 and WPF, featuring native dark theme support.
+A high-performance, native Windows desktop application to browse Quake II multiplayer servers (original Quake 2, not re-release). Built with .NET 10 and WPF, featuring native system theme support (automatically follows Windows dark/light theme).
 
 **Author:** ozy  
 **Repository:** https://github.com/ozy24/q2browser
@@ -13,7 +13,7 @@ A high-performance, native Windows desktop application to browse Quake II multip
 - ✅ Search and filter servers
 - ✅ Favorites persistence
 - ✅ Direct launch Quake 2 executable with server connection
-- ✅ Native dark theme support (follows system theme)
+- ✅ Native system theme support (automatically follows Windows dark/light theme via .NET 10 ThemeMode)
 
 ---
 
@@ -124,6 +124,20 @@ dotnet build Q2Browser.sln
 dotnet run --project Q2Browser.Wpf/Q2Browser.Wpf.csproj
 ```
 
+#### Publishing for Release
+
+To create a distributable single-file executable:
+
+```powershell
+# Using the provided script
+.\publish.bat
+
+# Or manually
+dotnet publish Q2Browser.Wpf/Q2Browser.Wpf.csproj --configuration Release --output "publish" --self-contained true --runtime win-x64 -p:PublishSingleFile=true
+```
+
+The published executable will be in the `publish` folder. This creates a self-contained, single-file executable that includes the .NET runtime and can be distributed without requiring .NET to be installed on the target machine.
+
 ### Project Structure
 
 ```
@@ -164,4 +178,4 @@ Q2Browser.sln
 
 ## License
 
-This project is provided as-is for educational and personal use.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
