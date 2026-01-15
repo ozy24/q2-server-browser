@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Net;
 using System.Text;
 using Q2Connect.Core.Models;
@@ -8,19 +9,24 @@ namespace Q2Connect.Core.Networking;
 
 public class HttpMasterServerClient : IDisposable
 {
+    private const int MAX_HTTP_RESPONSE_SIZE = 50 * 1024 * 1024; // 50MB
+    private const int MAX_SERVERS_PER_RESPONSE = 10000;
+
+    // Use static HttpClient to prevent socket exhaustion
+    // HttpClient is thread-safe and designed to be reused
+    private static readonly HttpClient SharedHttpClient = new HttpClient
+    {
+        Timeout = TimeSpan.FromSeconds(10)
+    };
+
     private readonly Settings _settings;
     private readonly ILogger? _logger;
-    private readonly HttpClient _httpClient;
     private bool _disposed;
 
     public HttpMasterServerClient(Settings settings, ILogger? logger = null)
     {
         _settings = settings;
         _logger = logger;
-        _httpClient = new HttpClient
-        {
-            Timeout = TimeSpan.FromSeconds(10)
-        };
     }
 
     public async Task<List<IPEndPoint>> QueryServersAsync(CancellationToken cancellationToken = default)
@@ -44,7 +50,7 @@ public class HttpMasterServerClient : IDisposable
         {
             _logger?.LogInfo($"Fetching server list from HTTP master: {_settings.HttpMasterServerUrl}");
 
-            var response = await _httpClient.GetAsync(_settings.HttpMasterServerUrl, cancellationToken).ConfigureAwait(false);
+            var response = await SharedHttpClient.GetAsync(_settings.HttpMasterServerUrl, cancellationToken).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
 
             var contentType = response.Content.Headers.ContentType?.MediaType ?? "";
@@ -57,6 +63,13 @@ public class HttpMasterServerClient : IDisposable
             if (data.Length == 0)
             {
                 _logger?.LogWarning("HTTP master server returned empty response");
+                return servers;
+            }
+
+            // Check response size to prevent DoS
+            if (data.Length > MAX_HTTP_RESPONSE_SIZE)
+            {
+                _logger?.LogError($"HTTP master server response too large: {data.Length} bytes (max: {MAX_HTTP_RESPONSE_SIZE})");
                 return servers;
             }
 
@@ -84,11 +97,12 @@ public class HttpMasterServerClient : IDisposable
 
             // q2servers.com returns binary format directly (6-byte chunks: 4-byte IP + 2-byte port)
             // Check if it starts with text prefix like "+6" (q2pro format) or is pure binary
+            List<IPEndPoint> parsed;
             if (data.Length > 0 && (data[0] == (byte)'+' || data[0] == (byte)'-'))
             {
                 // Binary format with prefix like "+6" or "-6" (q2pro internal format)
                 _logger?.LogDebug("Detected binary format with prefix");
-                servers.AddRange(ParseBinaryFormat(data));
+                parsed = ParseBinaryFormat(data);
             }
             else if (data.Length > 0 && data[0] == 0xFF && data.Length >= 4 && 
                      data[1] == 0xFF && data[2] == 0xFF && data[3] == 0xFF)
@@ -97,13 +111,24 @@ public class HttpMasterServerClient : IDisposable
                 _logger?.LogDebug("Detected OOB header, removing and parsing");
                 var payload = new byte[data.Length - 4];
                 Array.Copy(data, 4, payload, 0, payload.Length);
-                servers.AddRange(ParseBinaryFormat(payload, 6));
+                parsed = ParseBinaryFormat(payload, 6);
             }
             else
             {
                 // Pure binary format (most common for HTTP master servers)
                 _logger?.LogDebug("Parsing as pure binary format (6-byte chunks)");
-                servers.AddRange(ParseBinaryFormat(data, 6));
+                parsed = ParseBinaryFormat(data, 6);
+            }
+
+            // Limit number of servers to prevent DoS
+            if (parsed.Count > MAX_SERVERS_PER_RESPONSE)
+            {
+                _logger?.LogWarning($"HTTP master server returned {parsed.Count} servers, limiting to {MAX_SERVERS_PER_RESPONSE}");
+                servers.AddRange(parsed.Take(MAX_SERVERS_PER_RESPONSE));
+            }
+            else
+            {
+                servers.AddRange(parsed);
             }
 
             _logger?.LogInfo($"Parsed {servers.Count} server(s) from HTTP master server");
@@ -173,7 +198,7 @@ public class HttpMasterServerClient : IDisposable
     {
         if (!_disposed)
         {
-            _httpClient?.Dispose();
+            // Don't dispose shared HttpClient - it's static and reusable
             _disposed = true;
         }
     }

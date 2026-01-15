@@ -25,7 +25,9 @@ public class MasterServerClient
         _logger?.LogInfo($"Querying UDP master server: {_settings.MasterServerAddress}:{_settings.MasterServerPort}");
         
         using var client = new UdpClient();
-        client.Client.ReceiveTimeout = 5000;
+        // Use ProbeTimeoutMs setting, but ensure minimum 1000ms for master server queries
+        var receiveTimeoutMs = Math.Max(_settings.ProbeTimeoutMs, 1000);
+        client.Client.ReceiveTimeout = receiveTimeoutMs;
 
         try
         {
@@ -53,7 +55,9 @@ public class MasterServerClient
             _logger?.LogDebug("Query packet sent, waiting for response...");
 
             var receivedData = new List<byte>();
-            var timeout = TimeSpan.FromSeconds(5);
+            // Use ProbeTimeoutMs setting, but ensure minimum 1000ms for master server queries
+            var queryTimeoutMs = Math.Max(_settings.ProbeTimeoutMs, 1000);
+            var timeout = TimeSpan.FromMilliseconds(queryTimeoutMs);
             var endTime = DateTime.UtcNow.Add(timeout);
             int packetCount = 0;
             bool receivedEndMarker = false;

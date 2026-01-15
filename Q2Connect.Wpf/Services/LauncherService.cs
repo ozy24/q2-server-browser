@@ -1,7 +1,9 @@
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.Win32;
 using Q2Connect.Core.Models;
 
@@ -28,17 +30,40 @@ public class LauncherService
             throw new FileNotFoundException($"Quake 2 executable not found: {_settings.Q2ExecutablePath}");
         }
 
-        var arguments = $"+connect {server.Address}:{server.Port}";
+        // Sanitize address and port to prevent command injection
+        var sanitizedAddress = SanitizeAddress(server.Address);
+        var arguments = $"+connect {sanitizedAddress}:{server.Port}";
+
+        var workingDir = Path.GetDirectoryName(_settings.Q2ExecutablePath);
+        if (string.IsNullOrEmpty(workingDir))
+        {
+            throw new InvalidOperationException("Cannot determine working directory for Quake 2 executable");
+        }
 
         var startInfo = new ProcessStartInfo
         {
             FileName = _settings.Q2ExecutablePath,
             Arguments = arguments,
             UseShellExecute = false,
-            WorkingDirectory = Path.GetDirectoryName(_settings.Q2ExecutablePath)
+            WorkingDirectory = workingDir
         };
 
-        Process.Start(startInfo);
+        try
+        {
+            var process = Process.Start(startInfo);
+            if (process == null)
+            {
+                throw new InvalidOperationException("Failed to start Quake 2 process");
+            }
+        }
+        catch (Win32Exception ex)
+        {
+            throw new InvalidOperationException($"Failed to launch Quake 2: {ex.Message}", ex);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Error launching Quake 2: {ex.Message}", ex);
+        }
     }
 
     public void LaunchGameWithAddress(string address)
@@ -53,18 +78,63 @@ public class LauncherService
             throw new FileNotFoundException($"Quake 2 executable not found: {_settings.Q2ExecutablePath}");
         }
 
-        // Pass the address directly to Quake 2 - it will handle parsing
-        var arguments = $"+connect {address}";
+        // Sanitize address to prevent command injection
+        var sanitizedAddress = SanitizeAddress(address);
+        var arguments = $"+connect {sanitizedAddress}";
+
+        var workingDir = Path.GetDirectoryName(_settings.Q2ExecutablePath);
+        if (string.IsNullOrEmpty(workingDir))
+        {
+            throw new InvalidOperationException("Cannot determine working directory for Quake 2 executable");
+        }
 
         var startInfo = new ProcessStartInfo
         {
             FileName = _settings.Q2ExecutablePath,
             Arguments = arguments,
             UseShellExecute = false,
-            WorkingDirectory = Path.GetDirectoryName(_settings.Q2ExecutablePath)
+            WorkingDirectory = workingDir
         };
 
-        Process.Start(startInfo);
+        try
+        {
+            var process = Process.Start(startInfo);
+            if (process == null)
+            {
+                throw new InvalidOperationException("Failed to start Quake 2 process");
+            }
+        }
+        catch (Win32Exception ex)
+        {
+            throw new InvalidOperationException($"Failed to launch Quake 2: {ex.Message}", ex);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Error launching Quake 2: {ex.Message}", ex);
+        }
+    }
+
+    /// <summary>
+    /// Sanitizes an address string to prevent command injection.
+    /// Only allows alphanumeric characters, dots, colons, hyphens, and brackets (for IPv6).
+    /// </summary>
+    private static string SanitizeAddress(string address)
+    {
+        if (string.IsNullOrWhiteSpace(address))
+        {
+            throw new ArgumentException("Address cannot be null or empty", nameof(address));
+        }
+
+        // Remove any characters that could be used for command injection
+        // Allow: alphanumeric, dots (.), colons (:), hyphens (-), brackets ([] for IPv6)
+        var sanitized = Regex.Replace(address, @"[^a-zA-Z0-9.:\[\]-]", string.Empty);
+        
+        if (string.IsNullOrWhiteSpace(sanitized))
+        {
+            throw new ArgumentException("Address contains only invalid characters", nameof(address));
+        }
+
+        return sanitized;
     }
 
     public static void RegisterUriScheme()

@@ -35,24 +35,29 @@ public class ThrottledObservableCollection<T> : ObservableCollection<T>, IDispos
 
     private void OnTimerTick(object? sender, EventArgs e)
     {
+        List<T> itemsToAdd;
         lock (_lockObject)
         {
             if (_disposed || _pendingItems.Count == 0) return;
 
-            var itemsToAdd = new List<T>();
+            itemsToAdd = new List<T>();
             while (_pendingItems.Count > 0)
             {
                 itemsToAdd.Add(_pendingItems.Dequeue());
             }
+        }
 
-            if (itemsToAdd.Count > 0)
+        // Add items outside the lock to avoid holding lock during UI operations
+        // DispatcherTimer already runs on UI thread, but be explicit for safety
+        if (itemsToAdd != null && itemsToAdd.Count > 0)
+        {
+            Application.Current.Dispatcher.Invoke(() =>
             {
-                // DispatcherTimer already runs on UI thread
                 foreach (var item in itemsToAdd)
                 {
                     Add(item);
                 }
-            }
+            });
         }
     }
 

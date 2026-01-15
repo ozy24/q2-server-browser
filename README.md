@@ -5,6 +5,18 @@ A high-performance, native Windows desktop application to browse Quake II multip
 **Author:** ozy  
 **Repository:** https://github.com/ozy24/q2browser
 
+## Screenshots
+
+![Main Window](img/1.png)
+
+![Server List](img/2.png)
+
+![Settings Window](img/3.png)
+
+![Address Book](img/4.png)
+
+![About Window](img/5.png)
+
 ## Features
 
 - ✅ Query Quake II master servers

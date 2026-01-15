@@ -31,7 +31,6 @@ public class AddressBookViewModel : INotifyPropertyChanged
         DeleteCommand = new RelayCommand(async _ => await DeleteSelectedEntryAsync(), _ => SelectedEntry != null);
         ConnectCommand = new RelayCommand(_ => ConnectToSelectedEntry(), _ => SelectedEntry != null);
         CopyDetailsCommand = new RelayCommand(_ => CopyDetails(), _ => SelectedEntry != null);
-        EditCommand = new RelayCommand(async _ => await EditSelectedEntryAsync(), _ => SelectedEntry != null);
         
         _ = LoadEntriesAsync();
     }
@@ -53,7 +52,6 @@ public class AddressBookViewModel : INotifyPropertyChanged
             ((RelayCommand)DeleteCommand).RaiseCanExecuteChanged();
             ((RelayCommand)ConnectCommand).RaiseCanExecuteChanged();
             ((RelayCommand)CopyDetailsCommand).RaiseCanExecuteChanged();
-            ((RelayCommand)EditCommand).RaiseCanExecuteChanged();
         }
     }
 
@@ -82,65 +80,26 @@ public class AddressBookViewModel : INotifyPropertyChanged
     public ICommand DeleteCommand { get; }
     public ICommand ConnectCommand { get; }
     public ICommand CopyDetailsCommand { get; }
-    public ICommand EditCommand { get; }
 
     private bool CanAddEntry()
     {
         return !string.IsNullOrWhiteSpace(NewAddress);
     }
 
-    private const int MAX_ADDRESS_LENGTH = 512; // Reasonable limit for any address format
-
     private bool IsValidAddress(string address)
     {
         if (string.IsNullOrWhiteSpace(address))
             return false;
 
-        // Reasonable length limit
-        if (address.Length > MAX_ADDRESS_LENGTH)
+        var parts = address.Split(':');
+        if (parts.Length != 2)
             return false;
 
-        // Allow flexible formats:
-        // - IP addresses (IPv4/IPv6) with or without port
-        // - Hostnames/FQDNs with or without port
-        // - Local addresses
-        // Must contain at least some alphanumeric characters
-        // Security sanitization happens in LauncherService.SanitizeAddress()
-        
-        // Check that it's not just special characters
-        // Allow: alphanumeric, dots, colons, hyphens, underscores, brackets (for IPv6)
-        var hasValidCharacters = System.Text.RegularExpressions.Regex.IsMatch(address, @"[a-zA-Z0-9]");
-        if (!hasValidCharacters)
+        if (!IPAddress.TryParse(parts[0], out _))
             return false;
 
-        // If port is specified, validate it
-        var lastColonIndex = address.LastIndexOf(':');
-        if (lastColonIndex > 0 && lastColonIndex < address.Length - 1)
-        {
-            // Check if it's IPv6 format [host]:port or just host:port
-            var portPart = address.Substring(lastColonIndex + 1);
-            
-            // Skip if this is part of IPv6 address (between brackets)
-            var bracketBeforeColon = address.LastIndexOf('[');
-            var bracketAfterColon = address.LastIndexOf(']');
-            var isIpv6Format = bracketBeforeColon >= 0 && bracketAfterColon > bracketBeforeColon && 
-                              lastColonIndex > bracketAfterColon;
-            
-            if (isIpv6Format || bracketBeforeColon < 0)
-            {
-                // This looks like a port number
-                if (int.TryParse(portPart, out var port))
-                {
-                    if (port < 1 || port > 65535)
-                        return false;
-                }
-                else if (portPart.Length > 0)
-                {
-                    // Not a valid numeric port
-                    return false;
-                }
-            }
-        }
+        if (!int.TryParse(parts[1], out var port) || port < 1 || port > 65535)
+            return false;
 
         return true;
     }
@@ -151,23 +110,6 @@ public class AddressBookViewModel : INotifyPropertyChanged
             return;
 
         var trimmedAddress = NewAddress.Trim();
-        
-        // Basic validation - allow flexible formats
-        // Security sanitization happens in LauncherService.SanitizeAddress()
-        if (!IsValidAddress(trimmedAddress))
-        {
-            System.Windows.MessageBox.Show(
-                "Invalid address format. Address must contain valid characters and be a reasonable length.\n\n" +
-                "Accepted formats:\n" +
-                "- IP address: 192.168.1.1 or 192.168.1.1:27910\n" +
-                "- IPv6 address: [2001:db8::1] or [2001:db8::1]:27910\n" +
-                "- Hostname: example.com or example.com:27910\n" +
-                "- Local address: localhost or localhost:27910",
-                "Invalid Address",
-                System.Windows.MessageBoxButton.OK,
-                System.Windows.MessageBoxImage.Warning);
-            return;
-        }
         
         // Check for duplicates
         if (Entries.Any(e => e.Address.Equals(trimmedAddress, StringComparison.OrdinalIgnoreCase)))
@@ -219,7 +161,7 @@ public class AddressBookViewModel : INotifyPropertyChanged
         }
     }
 
-    public async System.Threading.Tasks.Task SaveEntriesAsync()
+    private async System.Threading.Tasks.Task SaveEntriesAsync()
     {
         try
         {
@@ -287,83 +229,6 @@ public class AddressBookViewModel : INotifyPropertyChanged
         catch (Exception ex)
         {
             DiagnosticLogger.Instance.LogError($"Error copying address book entry details: {ex.Message}", ex.ToString());
-        }
-    }
-
-    private async System.Threading.Tasks.Task EditSelectedEntryAsync()
-    {
-        if (SelectedEntry == null)
-            return;
-
-        try
-        {
-            var editWindow = new Views.EditAddressBookEntryWindow(SelectedEntry)
-            {
-                Owner = System.Windows.Application.Current.MainWindow
-            };
-
-            if (editWindow.ShowDialog() == true)
-            {
-                var editedEntry = editWindow.Entry;
-                var trimmedAddress = editedEntry.Address.Trim();
-                
-        // Basic validation (defense in depth - EditWindow also validates)
-        // Security sanitization happens in LauncherService.SanitizeAddress()
-        if (!IsValidAddress(trimmedAddress))
-        {
-            System.Windows.MessageBox.Show(
-                "Invalid address format. Address must contain valid characters and be a reasonable length.\n\n" +
-                "Accepted formats:\n" +
-                "- IP address: 192.168.1.1 or 192.168.1.1:27910\n" +
-                "- IPv6 address: [2001:db8::1] or [2001:db8::1]:27910\n" +
-                "- Hostname: example.com or example.com:27910\n" +
-                "- Local address: localhost or localhost:27910",
-                "Invalid Address",
-                System.Windows.MessageBoxButton.OK,
-                System.Windows.MessageBoxImage.Warning);
-            return;
-        }
-                
-                // Check for duplicates (excluding the current entry)
-                var duplicate = Entries.FirstOrDefault(e => 
-                    e != SelectedEntry && 
-                    e.Address.Equals(trimmedAddress, StringComparison.OrdinalIgnoreCase));
-                
-                if (duplicate != null)
-                {
-                    System.Windows.MessageBox.Show(
-                        $"An entry with address '{trimmedAddress}' already exists.",
-                        "Duplicate Entry",
-                        System.Windows.MessageBoxButton.OK,
-                        System.Windows.MessageBoxImage.Warning);
-                    return;
-                }
-
-                // Update the entry by removing and re-adding to trigger UI update
-                var index = Entries.IndexOf(SelectedEntry);
-                var updatedEntry = new AddressBookEntry
-                {
-                    Address = trimmedAddress,
-                    Label = string.IsNullOrWhiteSpace(editedEntry.Label) 
-                        ? trimmedAddress 
-                        : editedEntry.Label.Trim()
-                };
-                
-                Entries.RemoveAt(index);
-                Entries.Insert(index, updatedEntry);
-                SelectedEntry = updatedEntry;
-                
-                await SaveEntriesAsync();
-            }
-        }
-        catch (Exception ex)
-        {
-            DiagnosticLogger.Instance.LogError($"Error editing address book entry: {ex.Message}", ex.ToString());
-            System.Windows.MessageBox.Show(
-                $"Error editing entry:\n\n{ex.Message}",
-                "Error",
-                System.Windows.MessageBoxButton.OK,
-                System.Windows.MessageBoxImage.Error);
         }
     }
 

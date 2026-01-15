@@ -11,6 +11,10 @@ namespace Q2Connect.Core.Networking;
 
 public class GameServerProbe : IDisposable
 {
+    private const int MAX_STATUS_RESPONSE_SIZE = 64 * 1024; // 64KB
+    private const int MAX_CVARS = 256;
+    private const int MAX_PLAYERS = 128;
+
     private readonly Settings _settings;
     private readonly SemaphoreSlim _semaphore;
     private readonly ILogger? _logger;
@@ -93,9 +97,29 @@ public class GameServerProbe : IDisposable
             }
 
             var payload = PacketHeader.RemoveOobHeader(data);
+            
+            // Check payload size to prevent DoS
+            if (payload.Length > MAX_STATUS_RESPONSE_SIZE)
+            {
+                _logger?.LogWarning($"Server {endPoint} response too large: {payload.Length} bytes (max: {MAX_STATUS_RESPONSE_SIZE}), truncating");
+                var truncated = new byte[MAX_STATUS_RESPONSE_SIZE];
+                Array.Copy(payload, truncated, MAX_STATUS_RESPONSE_SIZE);
+                payload = truncated;
+            }
+            
             var response = Encoding.ASCII.GetString(payload);
             _logger?.LogDebug($"Server {endPoint} responded in {elapsed}ms ({payload.Length} bytes)");
-            _logger?.LogDebug($"Response preview: {response.Substring(0, Math.Min(200, response.Length))}");
+            if (response.Length > 0)
+            {
+                // Use AsSpan for better performance when logging preview
+                var previewLength = Math.Min(200, response.Length);
+                var preview = response.AsSpan(0, previewLength).ToString();
+                _logger?.LogDebug($"Response preview: {preview}");
+            }
+            else
+            {
+                _logger?.LogDebug("Response preview: (empty)");
+            }
 
             var serverEntry = new ServerEntry
             {
@@ -140,15 +164,16 @@ public class GameServerProbe : IDisposable
             startIndex = 6; // Length of "print\n"
         }
         
-        var remaining = response.Substring(startIndex);
-        var firstNewline = remaining.IndexOf('\n');
+        // Use Span for better performance when parsing
+        var remainingSpan = response.AsSpan(startIndex);
+        var firstNewline = remainingSpan.IndexOf('\n');
         if (firstNewline < 0)
         {
-            firstNewline = remaining.Length;
+            firstNewline = remainingSpan.Length;
         }
 
         // Parse CVARs from first line (key\value format)
-        var infostring = remaining.Substring(0, firstNewline);
+        var infostring = remainingSpan.Slice(0, firstNewline).ToString();
         _logger?.LogDebug($"Infostring: {infostring}");
         
         // Parse CVARs: format is \key\value\key\value...
@@ -157,14 +182,23 @@ public class GameServerProbe : IDisposable
         var cvarRegex = new Regex(@"\\([^\\]+)\\([^\\]*)", RegexOptions.Compiled);
         var cvarMatches = cvarRegex.Matches(infostring);
         
+        // Limit CVAR count to prevent DoS
+        var cvarCount = 0;
         foreach (Match match in cvarMatches)
         {
+            if (cvarCount >= MAX_CVARS)
+            {
+                _logger?.LogWarning($"CVAR limit reached ({MAX_CVARS}), truncating remaining CVARs");
+                break;
+            }
+            
             var key = match.Groups[1].Value;
             var value = match.Groups[2].Value;
             if (!string.IsNullOrEmpty(key))
             {
                 serverEntry.Cvars[key] = value;
                 _logger?.LogDebug($"Parsed CVAR: {key} = {value}");
+                cvarCount++;
             }
         }
         
@@ -175,7 +209,7 @@ public class GameServerProbe : IDisposable
             
             // Manual parsing: split by backslash and process pairs
             var parts = infostring.Split('\\', StringSplitOptions.RemoveEmptyEntries);
-            for (int i = 0; i < parts.Length - 1; i += 2)
+            for (int i = 0; i < parts.Length - 1 && serverEntry.Cvars.Count < MAX_CVARS; i += 2)
             {
                 var key = parts[i];
                 var value = i + 1 < parts.Length ? parts[i + 1] : string.Empty;
@@ -185,6 +219,11 @@ public class GameServerProbe : IDisposable
                     _logger?.LogDebug($"Manually parsed CVAR: {key} = {value}");
                 }
             }
+            
+            if (serverEntry.Cvars.Count >= MAX_CVARS)
+            {
+                _logger?.LogWarning($"CVAR limit reached during manual parsing ({MAX_CVARS})");
+            }
         }
         
         if (serverEntry.Cvars.Count == 0)
@@ -193,13 +232,20 @@ public class GameServerProbe : IDisposable
         }
 
         // Parse player list (everything after first '\n' in remaining string)
-        if (firstNewline < remaining.Length - 1)
+        if (firstNewline < remainingSpan.Length - 1)
         {
-            var playersSection = remaining.Substring(firstNewline + 1);
+            var playersSection = remainingSpan.Slice(firstNewline + 1).ToString();
             var playerLines = playersSection.Split('\n', StringSplitOptions.RemoveEmptyEntries);
             
+            // Limit player count to prevent DoS
+            var playerCount = 0;
             foreach (var line in playerLines)
             {
+                if (playerCount >= MAX_PLAYERS)
+                {
+                    _logger?.LogWarning($"Player limit reached ({MAX_PLAYERS}), truncating remaining players");
+                    break;
+                }
                 var trimmed = line.Trim();
                 if (string.IsNullOrEmpty(trimmed))
                     continue;
@@ -221,6 +267,7 @@ public class GameServerProbe : IDisposable
                             Ping = ping,
                             Name = name
                         });
+                        playerCount++;
                     }
                 }
                 else
@@ -239,6 +286,7 @@ public class GameServerProbe : IDisposable
                                 Ping = ping,
                                 Name = name
                             });
+                            playerCount++;
                         }
                     }
                 }

@@ -41,16 +41,13 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private bool _includePlayerNamesInSearch;
     private int _selectedTabIndex;
     private CancellationTokenSource? _refreshCancellation;
-    private CancellationTokenSource? _disposalCancellation;
     private bool _isInitialized;
-    private bool _disposed;
 
     public MainViewModel()
     {
         var logger = new CoreLoggerAdapter();
         _favoritesService = new FavoritesService(logger);
         _servers = new ThrottledObservableCollection<ServerRowViewModel>(150);
-        _disposalCancellation = new CancellationTokenSource();
         
         // Create a ListCollectionView for sorting and filtering
         _serversView = new ListCollectionView(_servers);
@@ -69,14 +66,13 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         
         RefreshCommand = new RelayCommand(async _ => await RefreshServersAsync(), _ => !IsRefreshing && _isInitialized);
         ConnectCommand = new RelayCommand(ConnectToServer, _ => SelectedServer != null || AddressBookViewModel?.SelectedEntry != null);
-        ToggleFavoriteCommand = new RelayCommand(async _ => await ToggleFavoriteAsync(), _ => SelectedServer != null && SelectedTabIndex == 0);
+        ToggleFavoriteCommand = new RelayCommand(async _ => await ToggleFavoriteAsync(), _ => SelectedServer != null);
         OpenSettingsCommand = new RelayCommand(_ => OpenSettings());
         OpenLogCommand = new RelayCommand(_ => OpenLog());
         OpenAboutCommand = new RelayCommand(_ => OpenAbout());
         CopyServerNameCommand = new RelayCommand(CopyServerName, _ => SelectedServer != null);
         CopyIpAddressCommand = new RelayCommand(CopyIpAddress, _ => SelectedServer != null);
         CopyServerDetailsCommand = new RelayCommand(CopyServerDetails, _ => SelectedServer != null);
-        AddToAddressBookCommand = new RelayCommand(async _ => await AddToAddressBookAsync(), _ => SelectedServer != null);
         
         // Initialize asynchronously with proper error handling
         _ = InitializeAsync().ContinueWith(task =>
@@ -90,7 +86,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                     StatusText = $"Initialization error: {task.Exception.GetBaseException().Message}";
                 });
             }
-        }, TaskContinuationOptions.OnlyOnFaulted).ConfigureAwait(false);
+        }, TaskContinuationOptions.OnlyOnFaulted);
     }
 
 
@@ -150,7 +146,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                         DiagnosticLogger.Instance.LogError($"Auto-refresh failed: {task.Exception.GetBaseException().Message}", 
                             task.Exception.ToString());
                     }
-                }, TaskContinuationOptions.OnlyOnFaulted).ConfigureAwait(false);
+                }, TaskContinuationOptions.OnlyOnFaulted);
             }
             else
             {
@@ -301,7 +297,6 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                 ((RelayCommand)CopyServerNameCommand).RaiseCanExecuteChanged();
                 ((RelayCommand)CopyIpAddressCommand).RaiseCanExecuteChanged();
                 ((RelayCommand)CopyServerDetailsCommand).RaiseCanExecuteChanged();
-                ((RelayCommand)AddToAddressBookCommand).RaiseCanExecuteChanged();
             }
         }
     }
@@ -346,23 +341,17 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                 UpdateFilter();
                 
                 // Save settings asynchronously
-                var cancellationToken = _disposalCancellation?.Token ?? CancellationToken.None;
                 _ = Task.Run(async () =>
                 {
                     try
                     {
-                        cancellationToken.ThrowIfCancellationRequested();
-                        await _favoritesService.SaveSettingsAsync(_currentSettings).ConfigureAwait(false);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        // Task was cancelled during disposal, ignore
+                        await _favoritesService.SaveSettingsAsync(_currentSettings);
                     }
                     catch (Exception ex)
                     {
                         DiagnosticLogger.Instance.LogError($"Failed to save settings: {ex.Message}", ex.ToString());
                     }
-                }, cancellationToken);
+                });
             }
         }
     }
@@ -416,7 +405,6 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public ICommand CopyServerNameCommand { get; }
     public ICommand CopyIpAddressCommand { get; }
     public ICommand CopyServerDetailsCommand { get; }
-    public ICommand AddToAddressBookCommand { get; }
 
     public int SelectedTabIndex
     {
@@ -429,27 +417,18 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                 _currentSettings.SelectedTabIndex = value;
                 OnPropertyChanged();
                 
-                // Update command states when tab changes
-                ((RelayCommand)ToggleFavoriteCommand).RaiseCanExecuteChanged();
-                
                 // Save settings asynchronously
-                var cancellationToken = _disposalCancellation?.Token ?? CancellationToken.None;
                 _ = Task.Run(async () =>
                 {
                     try
                     {
-                        cancellationToken.ThrowIfCancellationRequested();
-                        await _favoritesService.SaveSettingsAsync(_currentSettings).ConfigureAwait(false);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        // Task was cancelled during disposal, ignore
+                        await _favoritesService.SaveSettingsAsync(_currentSettings);
                     }
                     catch (Exception ex)
                     {
                         DiagnosticLogger.Instance.LogError($"Failed to save settings: {ex.Message}", ex.ToString());
                     }
-                }, cancellationToken);
+                });
             }
         }
     }
@@ -794,50 +773,6 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    private async Task AddToAddressBookAsync()
-    {
-        if (SelectedServer == null || AddressBookViewModel == null) return;
-
-        try
-        {
-            // Check if entry already exists
-            var existingEntry = AddressBookViewModel.Entries.FirstOrDefault(
-                e => e.Address.Equals(SelectedServer.FullAddress, StringComparison.OrdinalIgnoreCase));
-
-            if (existingEntry != null)
-            {
-                System.Windows.MessageBox.Show(
-                    $"Server '{SelectedServer.Hostname}' is already in the address book.",
-                    "Already Exists",
-                    System.Windows.MessageBoxButton.OK,
-                    System.Windows.MessageBoxImage.Information);
-                return;
-            }
-
-            // Add entry with address as ip:port and label as server name
-            var entry = new AddressBookEntry
-            {
-                Address = SelectedServer.FullAddress,
-                Label = SelectedServer.Hostname
-            };
-
-            AddressBookViewModel.Entries.Add(entry);
-            await AddressBookViewModel.SaveEntriesAsync();
-            
-            StatusText = $"Added '{SelectedServer.Hostname}' to address book";
-        }
-        catch (Exception ex)
-        {
-            StatusText = $"Error adding to address book: {ex.Message}";
-            DiagnosticLogger.Instance.LogError($"Error adding to address book: {ex.Message}", ex.ToString());
-            System.Windows.MessageBox.Show(
-                $"Error adding server to address book:\n\n{ex.Message}",
-                "Error",
-                System.Windows.MessageBoxButton.OK,
-                System.Windows.MessageBoxImage.Error);
-        }
-    }
-
     public event PropertyChangedEventHandler? PropertyChanged;
 
     private void UpdatePlayers()
@@ -859,14 +794,6 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public void Dispose()
     {
-        if (_disposed)
-            return;
-            
-        _disposed = true;
-        
-        // Cancel all background operations
-        _disposalCancellation?.Cancel();
-        
         // Dispose HTTP client
         _httpMasterServerClient?.Dispose();
         
@@ -876,24 +803,13 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         // Dispose throttled collection (and its timer)
         _servers?.Dispose();
         
-        // Dispose cancellation token sources
+        // Dispose cancellation token source
         _refreshCancellation?.Dispose();
-        _disposalCancellation?.Dispose();
         
         // Unsubscribe from selected server events
         if (_selectedServer != null)
         {
             _selectedServer.PropertyChanged -= SelectedServer_PropertyChanged;
-        }
-        
-        // Unsubscribe from address book view model events and dispose if needed
-        if (_addressBookViewModel != null)
-        {
-            _addressBookViewModel.PropertyChanged -= AddressBookViewModel_PropertyChanged;
-            if (_addressBookViewModel is IDisposable disposable)
-            {
-                disposable.Dispose();
-            }
         }
     }
 }

@@ -9,11 +9,6 @@ namespace Q2Connect.Core.Services;
 
 public class FavoritesService
 {
-    private const int MAX_SETTINGS_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-    private const int MAX_FAVORITES_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-    private const int MAX_ADDRESSBOOK_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-    private const int MAX_JSON_DEPTH = 64;
-
     private string _favoritesPath = string.Empty;
     private string _settingsPath = string.Empty;
     private string _addressBookPath = string.Empty;
@@ -25,9 +20,7 @@ public class FavoritesService
         _logger = logger;
         _jsonOptions = new JsonSerializerOptions
         {
-            WriteIndented = true,
-            MaxDepth = MAX_JSON_DEPTH,
-            ReadCommentHandling = System.Text.Json.JsonCommentHandling.Skip
+            WriteIndented = true
         };
         
         // Initialize paths - will be updated after settings are loaded
@@ -43,21 +36,7 @@ public class FavoritesService
             if (string.IsNullOrEmpty(exePath))
             {
                 // Fallback if entry assembly is not available
-                try
-                {
-                    var process = System.Diagnostics.Process.GetCurrentProcess();
-                    exePath = process.MainModule?.FileName;
-                }
-                catch (System.ComponentModel.Win32Exception)
-                {
-                    // MainModule may not be accessible in some scenarios (e.g., some security contexts)
-                    exePath = null;
-                }
-                catch (InvalidOperationException)
-                {
-                    // Process may have exited
-                    exePath = null;
-                }
+                exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
             }
             
             if (!string.IsNullOrEmpty(exePath))
@@ -89,22 +68,9 @@ public class FavoritesService
 
         try
         {
-            // Check file size to prevent DoS
-            var fileInfo = new FileInfo(_favoritesPath);
-            if (fileInfo.Length > MAX_FAVORITES_FILE_SIZE)
-            {
-                _logger?.LogError($"Favorites file too large: {fileInfo.Length} bytes (max: {MAX_FAVORITES_FILE_SIZE})");
-                return new List<string>();
-            }
-
             var json = await File.ReadAllTextAsync(_favoritesPath).ConfigureAwait(false);
             var favorites = JsonSerializer.Deserialize<List<string>>(json, _jsonOptions);
             return favorites ?? new List<string>();
-        }
-        catch (JsonException ex)
-        {
-            _logger?.LogError($"Invalid JSON in favorites file: {ex.Message}", ex.StackTrace);
-            return new List<string>();
         }
         catch (Exception ex)
         {
@@ -167,16 +133,6 @@ public class FavoritesService
 
         try
         {
-            // Check file size to prevent DoS
-            var fileInfo = new FileInfo(settingsPath);
-            if (fileInfo.Length > MAX_SETTINGS_FILE_SIZE)
-            {
-                _logger?.LogError($"Settings file too large: {fileInfo.Length} bytes (max: {MAX_SETTINGS_FILE_SIZE})");
-                var defaultSettings = new Settings();
-                UpdatePaths(defaultSettings.PortableMode);
-                return defaultSettings;
-            }
-
             var json = await File.ReadAllTextAsync(settingsPath);
             var settings = JsonSerializer.Deserialize<Settings>(json, _jsonOptions);
             
@@ -200,13 +156,6 @@ public class FavoritesService
             
             return settings;
         }
-        catch (JsonException ex)
-        {
-            _logger?.LogError($"Invalid JSON in settings file: {ex.Message}", ex.StackTrace);
-            var defaultSettings = new Settings();
-            UpdatePaths(defaultSettings.PortableMode);
-            return defaultSettings;
-        }
         catch (Exception ex)
         {
             _logger?.LogError($"Failed to load settings from {settingsPath}: {ex.Message}", ex.StackTrace);
@@ -221,21 +170,7 @@ public class FavoritesService
         var exePath = Assembly.GetEntryAssembly()?.Location;
         if (string.IsNullOrEmpty(exePath))
         {
-            try
-            {
-                var process = System.Diagnostics.Process.GetCurrentProcess();
-                exePath = process.MainModule?.FileName;
-            }
-            catch (System.ComponentModel.Win32Exception)
-            {
-                // MainModule may not be accessible in some scenarios (e.g., some security contexts)
-                exePath = null;
-            }
-            catch (InvalidOperationException)
-            {
-                // Process may have exited
-                exePath = null;
-            }
+            exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
         }
         
         if (!string.IsNullOrEmpty(exePath))
@@ -291,22 +226,9 @@ public class FavoritesService
 
         try
         {
-            // Check file size to prevent DoS
-            var fileInfo = new FileInfo(_addressBookPath);
-            if (fileInfo.Length > MAX_ADDRESSBOOK_FILE_SIZE)
-            {
-                _logger?.LogError($"Address book file too large: {fileInfo.Length} bytes (max: {MAX_ADDRESSBOOK_FILE_SIZE})");
-                return new List<AddressBookEntry>();
-            }
-
             var json = await File.ReadAllTextAsync(_addressBookPath).ConfigureAwait(false);
             var entries = JsonSerializer.Deserialize<List<AddressBookEntry>>(json, _jsonOptions);
             return entries ?? new List<AddressBookEntry>();
-        }
-        catch (JsonException ex)
-        {
-            _logger?.LogError($"Invalid JSON in address book file: {ex.Message}", ex.StackTrace);
-            return new List<AddressBookEntry>();
         }
         catch (Exception ex)
         {
